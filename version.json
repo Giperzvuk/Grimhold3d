@@ -1,0 +1,17 @@
+{
+  "version": "1.8",
+  "versionCode": 19,
+  "date": "2026-09-04",
+  "critical": false,
+  "notes": [
+    "Обновление прямо из игры: проверка версии на GitHub, список изменений, загрузка и установка APK одной кнопкой",
+    "Исходники выложены на GitHub, страница игры собирается в GitHub Pages",
+    "Проверка обновлений отключается в настройках; версию можно пропустить"
+  ],
+  "apk": "https://github.com/Giperzvuk/Grimhold3d/releases/download/v1.8/Grimhold3D.apk",
+  "html": "https://github.com/Giperzvuk/Grimhold3d/releases/download/v1.8/Grimhold3D.html",
+  "web": "https://giperzvuk.github.io/Grimhold3d/",
+  "page": "https://github.com/Giperzvuk/Grimhold3d/releases/tag/v1.8",
+  "apkSize": 1664517,
+  "apkSha256": "239aff50344dbafcb110cdf1ee642fdbe12308d26d9d99bb241ce285a803a6ce"
+}

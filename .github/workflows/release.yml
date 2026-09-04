@@ -1,0 +1,82 @@
+# По тегу v* собирает игру и публикует релиз с APK и одностраничным HTML.
+# Подпись APK берётся из секретов; без них релиз выходит только с HTML,
+# потому что APK, подписанный другим ключом, не встанет поверх установленной игры.
+name: release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Сверить тег с version.json
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          VER=$(python3 -c "import json;print(json.load(open('version.json'))['version'])")
+          MAN=$(grep -o 'android:versionName="[^"]*"' android/AndroidManifest.xml | cut -d'"' -f2)
+          echo "тег=$TAG version.json=$VER манифест=$MAN"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ] && { [ "$TAG" != "$VER" ] || [ "$TAG" != "$MAN" ]; }; then
+            echo "::error::версия в теге, version.json и AndroidManifest.xml должны совпадать"; exit 1
+          fi
+
+      - name: Собрать HTML
+        run: python3 build_html.py
+
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+
+      - name: Собрать и подписать APK
+        id: apk
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+          KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASS }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "::warning::нет секрета KEYSTORE_B64 — APK не собираю, релиз выйдет только с HTML"
+            echo "built=no" >> $GITHUB_OUTPUT; exit 0
+          fi
+          echo "$KEYSTORE_B64" | base64 -d > /tmp/release.keystore
+          BT=$(ls -d "$ANDROID_SDK_ROOT"/build-tools/* | sort -V | tail -1)
+          JAR="$ANDROID_SDK_ROOT/platforms/android-34/android.jar"
+          B=android/build; rm -rf $B; mkdir -p $B/res $B/classes $B/dex dist
+          "$BT/aapt2" compile --dir android/res -o $B/res/compiled.zip
+          "$BT/aapt2" link -o $B/resources.apk -I "$JAR" --manifest android/AndroidManifest.xml \
+            -A game --auto-add-overlay --java $B/gen $B/res/compiled.zip
+          javac --release 8 -encoding UTF-8 -nowarn -classpath "$JAR" -d $B/classes \
+            $(find android/src $B/gen -name '*.java')
+          "$BT/d8" --release --min-api 26 --lib "$JAR" --output $B/dex $(find $B/classes -name '*.class')
+          python3 pack.py $B/resources.apk $B/dex/classes.dex $B/unsigned.apk
+          "$BT/apksigner" sign --ks /tmp/release.keystore --ks-pass "pass:$KEYSTORE_PASS" \
+            --key-pass "pass:$KEYSTORE_PASS" --ks-key-alias "$KEY_ALIAS" \
+            --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true \
+            --out dist/Grimhold3D.apk $B/unsigned.apk
+          "$BT/apksigner" verify --verbose dist/Grimhold3D.apk
+          rm -f /tmp/release.keystore
+          echo "built=yes" >> $GITHUB_OUTPUT
+
+      - name: Сверить SHA-256 с version.json
+        if: steps.apk.outputs.built == 'yes'
+        run: |
+          WANT=$(python3 -c "import json;print(json.load(open('version.json')).get('apkSha256',''))")
+          GOT=$(sha256sum dist/Grimhold3D.apk | cut -d' ' -f1)
+          echo "version.json=$WANT сборка=$GOT"
+          if [ -n "$WANT" ] && [ "$WANT" != "$GOT" ]; then
+            echo "::warning::sha256 в version.json не совпал со сборкой раннера — игра откажется ставить такой файл. Пересчитай version.json тем же APK, который публикуешь."
+          fi
+
+      - name: Текст релиза
+        run: python3 tools/notes.py > NOTES.md
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          body_path: NOTES.md
+          files: |
+            dist/Grimhold3D.apk
+            dist/Grimhold3D.html
+          fail_on_unmatched_files: false
