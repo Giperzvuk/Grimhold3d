@@ -4,6 +4,9 @@
 'use strict';
 const Voice = (() => {
   const API = 'https://api.fish.audio/v1/tts', MODEL = 's2.1-pro-free';
+  // Предел ожидания ответа. Без него браузерный путь висит бесконечно: fetch сам
+  // по себе не истекает, и настройки застревали на «Запрос…» вместо диагноза.
+  const REQ_TIMEOUT = 30000;
   // Роли: разная подача без клонирования голоса. reference_id можно вписать в настройках (id голоса с fish.audio).
   const ROLES = {
     narrator: { speed: 1.0, temp: 0.6, top_p: 0.7 },
@@ -96,14 +99,20 @@ const Voice = (() => {
         pending.set(id, { res, rej });
         try { nat.request(id, url, auth, MODEL, JSON.stringify(body)); }
         catch (e) { pending.delete(id); rej(new Error('мост приложения недоступен')); }
-        setTimeout(() => { if (pending.has(id)) { pending.delete(id); try { nat.done(id); } catch (e) { } rej(new Error('таймаут')); } }, 95000);
+        setTimeout(() => { if (pending.has(id)) { pending.delete(id); try { nat.done(id); } catch (e) { } rej(new Error('таймаут')); } }, REQ_TIMEOUT);
       });
     }
     abort = new AbortController();
     const headers = { 'Content-Type': 'application/json', model: MODEL };
     if (auth) headers.Authorization = auth;
-    return fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal: abort.signal })
-      .then(r2 => { if (!r2.ok) throw new Error('HTTP ' + r2.status); return r2.arrayBuffer(); });
+    // Свой таймаут: обрыв по нему нужно отличать от отмены игроком, иначе диагноз
+    // будет «Отменено» там, где на самом деле никто не ответил.
+    const ctl = abort; let timedOut = false;
+    const timer = setTimeout(() => { timedOut = true; try { ctl.abort(); } catch (e) { } }, REQ_TIMEOUT);
+    return fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal: ctl.signal })
+      .then(r2 => { if (!r2.ok) throw new Error('HTTP ' + r2.status); return r2.arrayBuffer(); })
+      .catch(e => { throw timedOut ? new Error('таймаут') : e; })
+      .finally(() => clearTimeout(timer));
   }
   // Ответ нативного моста: забираем звук кусками (строка через мост ограничена по длине)
   function nativeDone(id) {
@@ -146,7 +155,9 @@ const Voice = (() => {
     stop(); const t0 = performance.now();
     request('Добро пожаловать в Гримхолд, странник.', 'elderMale')
       .then(ab => { play(ab); cb('Работает · ' + Math.round(performance.now() - t0) + ' мс'); })
-      .catch(e => cb(e && e.name === 'AbortError' ? 'Отменено' : /HTTP 401|HTTP 403/.test(e.message) ? 'Ключ не принят (401/403) — проверь ключ' : /HTTP 402/.test(e.message) ? 'Квота исчерпана (402)' : /HTTP/.test(e.message) ? e.message : native() ? 'Нет соединения: ' + e.message : 'Браузер блокирует прямой запрос (CORS). Нужен прокси — см. настройки, поле «Адрес прокси». В приложении-APK это не требуется.'));
+      .catch(e => cb(/таймаут/.test(e.message) ? 'Ответа нет ' + Math.round(REQ_TIMEOUT / 1000) + ' с. '
+        + (native() ? 'Проверь сеть и ключ.' : 'Скорее всего браузер режет прямой запрос — нужен прокси, поле «Адрес прокси».') :
+        e && e.name === 'AbortError' ? 'Отменено' : /HTTP 401|HTTP 403/.test(e.message) ? 'Ключ не принят (401/403) — проверь ключ' : /HTTP 402/.test(e.message) ? 'Квота исчерпана (402)' : /HTTP/.test(e.message) ? e.message : native() ? 'Нет соединения: ' + e.message : 'Браузер блокирует прямой запрос (CORS). Нужен прокси — см. настройки, поле «Адрес прокси». В приложении-APK это не требуется.'));
   }
   function clearCache() { mem.clear(); openDb().then(d => { if (d) try { d.transaction('clips', 'readwrite').objectStore('clips').clear(); } catch (e) { } }); }
   try { openDb(); } catch (e) { } // прогреваем кэш заранее: первая реплика не должна ждать открытия базы

@@ -62,8 +62,14 @@ const Models = (() => {
     // Слияние статичных частей под каждым узлом-суставом: меньше мешей и draw calls
     compact(node) {
       const kids = node.getChildren(undefined, true);
-      const tns = kids.filter(k => k.getClassName() === 'TransformNode');
-      const gather = (n, out) => { for (const c of n.getChildren(undefined, true)) { if (c.getClassName() === 'TransformNode') continue; if (c.name === 'face') { out.faces.push(c); continue; } out.list.push(c); gather(c, out); } };
+      // Сустав бывает привязан не к узлу, а к мешу: у волка шея висит на теле.
+      // Такой меш сливать нельзя — MergeMeshes уничтожает источники вместе с детьми,
+      // и поддерево сустава пропадает целиком (волк оставался без головы).
+      // Поэтому меш с узлом внутри считаем суставом: не сливаем и обходим отдельно.
+      const joint = k => k.getClassName() === 'TransformNode' ||
+        k.getChildren(c => c.getClassName() === 'TransformNode', false).length > 0;
+      const tns = kids.filter(joint);
+      const gather = (n, out) => { for (const c of n.getChildren(undefined, true)) { if (joint(c)) continue; if (c.name === 'face') { out.faces.push(c); continue; } out.list.push(c); gather(c, out); } };
       const out = { list: [], faces: [] }; gather(node, out);
       for (const t of tns) this.compact(t);
       if (out.list.length > 1) {
