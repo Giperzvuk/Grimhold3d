@@ -20,9 +20,11 @@ os.makedirs(os.path.join(ROOT, 'docs'), exist_ok=True)
 full = html.replace(tags, '<script>\n' + src('babylon.js') + '\n</script>\n' + mods)
 open(os.path.join(ROOT, 'dist', 'Grimhold3D.html'), 'w', encoding='utf-8').write(full)
 
-head = re.search(r'<title>.*?</title>\s*<style>.*?</style>', html, re.S).group(0)
-body = re.search(r'<body>(.*)</body>', html, re.S).group(1).replace(tags, f'<script src="{CDN}"></script>\n' + mods)
-light = head + '\n' + body
+# Страница для Pages — полноценный документ, а не голова с телом вперемешку.
+# Раньше здесь вырезались <title>+<style> и содержимое <body>, из-за чего терялись
+# DOCTYPE, charset и <meta viewport>: браузер уходил в quirks-режим, height:100%
+# переставал работать, а телефон рисовал страницу на виртуальной ширине 980px.
+light = html.replace(tags, f'<script src="{CDN}"></script>\n' + mods)
 open(os.path.join(ROOT, 'docs', 'index.html'), 'w', encoding='utf-8').write(light)
 open(os.path.join(ROOT, 'docs', '.nojekyll'), 'w').close()
 print(f'dist/Grimhold3D.html {len(full)//1024} КБ · docs/index.html {len(light)//1024} КБ')

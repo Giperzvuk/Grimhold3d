@@ -1,3 +1,10 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0b0a0d">
 <title>Гримхолд 3D</title>
 <style>
 :root{--ink:#e7dcc3;--dim:#9c8f75;--red:#b3352b;--blue:#3d6fb3;--green:#5c9a3c;--gold:#d9a53c;--panel:rgba(14,11,16,.96);--line:#5a4a3a;--sat:env(safe-area-inset-top,0px);--sal:env(safe-area-inset-left,0px);--sar:env(safe-area-inset-right,0px);--sab:env(safe-area-inset-bottom,0px)}
@@ -151,7 +158,8 @@ body.touch.portrait #rotate{display:flex}
 #fade.on{opacity:1}
 .hint{color:var(--dim);font-size:12px;margin-top:6px;font-weight:normal}
 </style>
-
+</head>
+<body>
 <canvas id="c3d"></canvas>
 <div id="hud">
   <canvas id="hudc"></canvas>
@@ -4610,9 +4618,13 @@ const UI = {
     // --- вспышка заклинания у руки ---
     if (P.castAnim > 0) { const s = H / 46, p = 1 - P.castAnim / 0.5, hx = W * 0.66, hy = H - 6 * s + Math.sin(p * Math.PI) * -30, ice = G.spell === 'ice', heal = G.spell === 'heal'; const g = c.createRadialGradient(hx + 6 * s, hy - 2 * s, 2, hx + 6 * s, hy - 2 * s, 9 * s); g.addColorStop(0, ice ? `rgba(160,210,255,${0.9 * Math.sin(p * Math.PI)})` : heal ? `rgba(160,255,180,${0.9 * Math.sin(p * Math.PI)})` : `rgba(255,190,80,${0.9 * Math.sin(p * Math.PI)})`); g.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = g; c.fillRect(hx - 8 * s, hy - 14 * s, 30 * s, 30 * s); c.drawImage(TEX.VIEW.hand, hx, hy, 12 * s, 9 * s); }
     // --- подсказки-обучение ---
+    // Порядок важен: показывается первая незакрытая подсказка, поэтому шаг, который
+    // нельзя выполнить прямо сейчас, останавливает всю цепочку. Парирование требует
+    // врага с замахом, а в стартовой деревне врагов нет — поэтому оно идёт последним
+    // и закрывается при первой же стычке, не загораживая остальное обучение.
     if (!this.open && !P.dead) { const hints = IN.touch
-      ? [['move', 'Левый палец — джойстик. Да, вот так. Молодец'], ['touch', 'Правой половиной экрана — обзор. Мир большой, в основном пустой'], ['use', 'Кнопка ДЕЙСТВИЕ: говорить, открывать, брать чужое'], ['attack', 'УДАР — атака. Удержать — блок. Блок работает лучше, чем кажется'], ['parry', 'Блок ровно в момент замаха — парирование. Враг отлетит и обидится'], ['spell', 'ОГОНЬ — заклинание. Удержать — сменить'], ['quick', 'Ячейки 1–4: тап — выпить, удержать — очистить'], ['inv', 'Сумка вверху справа. Там лежит всё, что ты у кого-то забрал'], ['craft', 'Наковальня, печь и котёл — ремесло. Дешевле, чем у Брандта, и злее']]
-      : [['move', 'WASD — ходьба, мышь — обзор'], ['use', 'E — говорить, открывать, брать чужое'], ['attack', 'ЛКМ — удар, ПКМ — блок'], ['parry', 'Блок ровно в момент замаха — парирование'], ['spell', 'F — заклинание, колесо — сменить'], ['quick', '1–4 — быстрые ячейки'], ['inv', 'I — сумка, J — дневник, M — карта'], ['craft', 'Наковальня, печь и котёл — ремесло']]; const h = hints.find(h => !G.hints[h[0]]); if (h) { const hy = cy0 + 24; c.font = 'bold 14px "Courier New", monospace'; c.textAlign = 'center'; c.fillStyle = 'rgba(0,0,0,.6)'; const tw = c.measureText(h[1]).width + 24; c.fillRect(W / 2 - tw / 2, hy, tw, 26); c.fillStyle = '#ffd060'; c.fillText(h[1], W / 2, hy + 13); c.textAlign = 'left'; c.font = 'bold 13px "Courier New", monospace'; } }
+      ? [['move', 'Левый палец — джойстик. Да, вот так. Молодец'], ['touch', 'Правой половиной экрана — обзор. Мир большой, в основном пустой'], ['use', 'Кнопка ДЕЙСТВИЕ: говорить, открывать, брать чужое'], ['attack', 'УДАР — атака. Удержать — блок. Блок работает лучше, чем кажется'], ['spell', 'ОГОНЬ — заклинание. Удержать — сменить'], ['quick', 'Ячейки 1–4: тап — выпить, удержать — очистить'], ['inv', 'Сумка вверху справа. Там лежит всё, что ты у кого-то забрал'], ['craft', 'Наковальня, печь и котёл — ремесло. Дешевле, чем у Брандта, и злее'], ['parry', 'Блок ровно в момент замаха — парирование. Враг отлетит и обидится']]
+      : [['move', 'WASD — ходьба, мышь — обзор'], ['use', 'E — говорить, открывать, брать чужое'], ['attack', 'ЛКМ — удар, ПКМ — блок'], ['spell', 'F — заклинание, колесо — сменить'], ['quick', '1–4 — быстрые ячейки'], ['inv', 'I — сумка, J — дневник, M — карта'], ['craft', 'Наковальня, печь и котёл — ремесло'], ['parry', 'Блок ровно в момент замаха — парирование']]; const h = hints.find(h => !G.hints[h[0]]); if (h) { const hy = cy0 + 24; c.font = 'bold 14px "Courier New", monospace'; c.textAlign = 'center'; c.fillStyle = 'rgba(0,0,0,.6)'; const tw = c.measureText(h[1]).width + 24; c.fillRect(W / 2 - tw / 2, hy, tw, 26); c.fillStyle = '#ffd060'; c.fillText(h[1], W / 2, hy + 13); c.textAlign = 'left'; c.font = 'bold 13px "Courier New", monospace'; } }
     // --- виньетки ---
     if (G.rest < 20 || G.hunger < 15 || G.thirst < 15) { const g = c.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, H * 0.8); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, `rgba(${G.hunger < 15 ? '60,20,0' : G.thirst < 15 ? '40,30,0' : '10,0,30'},0.5)`); c.fillStyle = g; c.fillRect(0, 0, W, H); }
     if (G.warmth < 25) { const g = c.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, H * 0.85); g.addColorStop(0, 'rgba(120,180,255,0)'); g.addColorStop(1, `rgba(120,180,255,${0.15 + (25 - G.warmth) / 25 * 0.35})`); c.fillStyle = g; c.fillRect(0, 0, W, H); }
@@ -4640,3 +4652,5 @@ requestAnimationFrame(frame);
 
 </script>
 
+</body>
+</html>
