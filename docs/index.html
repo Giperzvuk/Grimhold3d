@@ -2208,7 +2208,12 @@ const R = (() => {
     if (!list.length) return null;
     const base = Models.tree(kind); const mats = new Float32Array(list.length * 16);
     list.forEach((t, i) => { BABYLON.Matrix.Compose(new BABYLON.Vector3(t.s, t.s * (t.sy || 1), t.s), BABYLON.Quaternion.RotationAxis(BABYLON.Axis.Y, t.r || 0), new BABYLON.Vector3(t.x, t.y || 0, t.z)).copyToArray(mats, i * 16); });
-    base.thinInstanceSetBuffer('matrix', mats, 16, true); base.thinInstanceEnablePicking = false; base.metadata = { list, kind }; return base;
+    base.thinInstanceSetBuffer('matrix', mats, 16, true); base.thinInstanceEnablePicking = false;
+    // sharedMat обязателен: материал дерева приходит из кэша Models.colMat и общий
+    // для всех уровней. Без флага разборка уровня зовёт dispose(false, true) и вправе
+    // уничтожить его, а кэш продолжит отдавать мёртвый материал следующему уровню.
+    // decorField рядом помечен так же — treeField просто забыли.
+    base.metadata = { list, kind, sharedMat: true }; return base;
   }
   // ---- 3D-предмет (инстанс шаблона) с адаптером старого API спрайта ----
   class ItemMesh {
