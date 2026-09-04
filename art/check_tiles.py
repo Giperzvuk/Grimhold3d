@@ -232,6 +232,11 @@ def check_detail(a, Q, r):
         r.ok(f'деталь переживает NEAREST до 256: σ {src:.1f} → {dst:.1f}')
 
 
+# door и doorLocked — не тайлы: §B.1 просит одно полотно на всю грань. Движок кладёт их
+# через tile() наравне с остальными, поэтому четыре одинаковых квадранта — верное
+# решение, а не брак: какой квадрант ни выбери, полотно то же.
+SINGLE_PANEL = {'door', 'doorLocked'}
+
 def check_tile(path, r):
     print(f'\n  {os.path.basename(path)}')
     im = Image.open(path)
@@ -245,11 +250,15 @@ def check_tile(path, r):
         return
     r.info(f'{w}x{h}, {im.mode}')
     Q = quadrants(a)
+    single = os.path.basename(path)[:-4] in SINGLE_PANEL
+    if single:
+        r.info('одно полотно на всю грань (§B.1) — на четыре разных варианта не проверяю')
     check_mirror(Q, r)
     check_seams(Q, r)
     check_perimeter(Q, r)
     check_inner_seam(Q, r)
-    check_shifted(Q, r)
+    if not single:
+        check_shifted(Q, r)
     check_light(Q, r)
     check_tone(Q, r)
     check_detail(a, Q, r)
