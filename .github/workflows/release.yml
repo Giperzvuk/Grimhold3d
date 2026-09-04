@@ -74,7 +74,16 @@ jobs:
             echo "::warning::нет ни prebuilt/Grimhold3D.apk, ни секрета KEYSTORE_B64 — релиз выйдет только с HTML"
             echo "built=no" >> $GITHUB_OUTPUT; exit 0
           fi
-          echo "$KEYSTORE_B64" | base64 -d > /tmp/release.keystore
+          # Секрет легко завести неправильно — положить туда имя файла вместо содержимого.
+          # Голое "base64: invalid input" об этом не говорит, поэтому проверяем отдельно.
+          if ! echo "$KEYSTORE_B64" | base64 -d > /tmp/release.keystore 2>/dev/null || [ ! -s /tmp/release.keystore ]; then
+            echo "::error::секрет KEYSTORE_B64 не разбирается как base64. В нём должно лежать содержимое grimhold.keystore одной строкой — то, что даёт команда: base64 -w0 grimhold.keystore. Имя файла или путь туда класть не надо."
+            exit 1
+          fi
+          if ! keytool -list -keystore /tmp/release.keystore -storepass "$KEYSTORE_PASS" >/dev/null 2>&1; then
+            echo "::error::ключ расшифровался, но keytool его не открыл — скорее всего не подходит KEYSTORE_PASS."
+            rm -f /tmp/release.keystore; exit 1
+          fi
           BT=$(ls -d "$ANDROID_SDK_ROOT"/build-tools/* | sort -V | tail -1)
           JAR="$ANDROID_SDK_ROOT/platforms/android-34/android.jar"
           B=android/build; rm -rf $B; mkdir -p $B/res $B/classes $B/dex
