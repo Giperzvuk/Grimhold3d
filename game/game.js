@@ -5,7 +5,7 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, t) => a + (b - a) * t;
 const rand = (a, b) => a + Math.random() * (b - a);
 const dist2 = (ax, az, bx, bz) => Math.hypot(ax - bx, az - bz);
-const VERSION = '1.8';
+const VERSION = '1.9';
 let UID = 1; const uid = () => 'i' + (UID++) + '_' + Math.floor(Math.random() * 1e6).toString(36);
 
 // ---------- Предметы ----------

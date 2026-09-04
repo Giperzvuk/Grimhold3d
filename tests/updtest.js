@@ -1,5 +1,13 @@
 // Проверка механизма обновления: манифест, сравнение версий, диалог, ветка приложения
 const { chromium } = require('playwright'); const path = require('path');
+// Ожидаемую версию берём из AndroidManifest.xml — он источник правды.
+// Раньше здесь стояли числа 19 и 1.8, и тест ломался при любом подъёме версии.
+// version.json для сверки не годится: его пишет CI уже после выпуска релиза,
+// поэтому в рабочем дереве он законно отстаёт от исходников.
+const MANIFEST = require('fs').readFileSync(
+  require('path').resolve(__dirname, '..', 'android/AndroidManifest.xml'), 'utf8');
+const WANT_CODE = +MANIFEST.match(/android:versionCode="(\d+)"/)[1];
+const WANT_NAME = MANIFEST.match(/android:versionName="([^"]+)"/)[1];
 (async () => {
   const file = process.argv[2] || require('path').resolve(__dirname, '..', 'game/index.html');
   const b = await chromium.launch({ args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader'] });
@@ -16,7 +24,7 @@ const { chromium } = require('playwright'); const path = require('path');
 
   ck('модуль загружен', await ev(() => typeof Update === 'object'));
   const code = await ev(() => Update.CODE);
-  ck('versionCode совпадает с манифестом APK', code === 19, 'CODE=' + code);
+  ck('versionCode совпадает с манифестом APK', code === WANT_CODE, 'CODE=' + code + ' манифест=' + WANT_CODE);
 
   // --- 1. манифест новее: показываем окно ---
   await ev(() => {
@@ -30,7 +38,7 @@ const { chromium } = require('playwright'); const path = require('path');
   await ev(() => Update.prompt(true)); await wait(120);
   const dlg = await ev(() => ({ show: $('dlg').classList.contains('show'), name: $('dlgName').textContent, txt: $('dlgText').textContent, opts: [...$('dlgOpts').children].map(b => b.textContent) }));
   ck('окно обновления открылось', dlg.show && /Доступно обновление/.test(dlg.name), dlg.name);
-  ck('видно обе версии и размер', /1\.8/.test(dlg.txt) && /9\.9/.test(dlg.txt) && /2\.0 МБ/.test(dlg.txt), dlg.txt.slice(0, 90));
+  ck('видно обе версии и размер', dlg.txt.includes(WANT_NAME) && /9\.9/.test(dlg.txt) && /2\.0 МБ/.test(dlg.txt), dlg.txt.slice(0, 90));
   ck('список изменений', /первое/.test(dlg.txt) && /второе/.test(dlg.txt));
   ck('кнопки: загрузка, позже, пропустить', dlg.opts.length === 3 && /Открыть страницу/.test(dlg.opts[0]) && /Позже/.test(dlg.opts[1]) && /Пропустить/.test(dlg.opts[2]), dlg.opts.join(' | '));
 

@@ -1,8 +1,10 @@
-# По тегу v* собирает игру и публикует релиз с APK и одностраничным HTML.
-# Можно запустить и вручную (workflow_dispatch): тег берётся из поля tag и создаётся
-# на выбранной ветке. Это запасной путь, когда тег не получается запушить с машины.
-# Подпись APK берётся из секретов; без них релиз выходит только с HTML,
-# потому что APK, подписанный другим ключом, не встанет поверх установленной игры.
+# Выпуск релиза целиком в CI: сборка, подпись, публикация и обновление манифеста.
+# Локальная машина не нужна — цепочка сборки берётся из Android SDK на раннере.
+#
+# Источник правды по версии — android/AndroidManifest.xml. version.json больше не вход,
+# а выход: он пишется ПОСЛЕ публикации релиза, по факту выпущенного APK. Поэтому
+# apkSha256 в нём не может разойтись с опубликованным файлом, а игроки не видят
+# версию, для которой ещё нет сборки.
 name: release
 on:
   push:
@@ -10,7 +12,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Тег релиза, например v1.8. Если такого тега нет, он будет создан на выбранной ветке.'
+        description: 'Тег релиза, например v1.9. Если такого тега нет, он будет создан на выбранной ветке.'
         required: true
         type: string
 permissions:
@@ -29,20 +31,22 @@ jobs:
           TAG="${IN_TAG:-$GITHUB_REF_NAME}"
           case "$TAG" in
             v[0-9]*) ;;
-            *) echo "::error::тег должен выглядеть как v1.8, получено: $TAG"; exit 1 ;;
+            *) echo "::error::тег должен выглядеть как v1.9, получено: $TAG"; exit 1 ;;
           esac
           echo "tag=$TAG" >> $GITHUB_OUTPUT
 
-      - name: Сверить тег с version.json
+      - name: Сверить версию в трёх местах
         env:
           TAG_NAME: ${{ steps.rel.outputs.tag }}
         run: |
           TAG="${TAG_NAME#v}"
-          VER=$(python3 -c "import json;print(json.load(open('version.json'))['version'])")
           MAN=$(grep -o 'android:versionName="[^"]*"' android/AndroidManifest.xml | cut -d'"' -f2)
-          echo "тег=$TAG version.json=$VER манифест=$MAN"
-          if [ "$TAG" != "$VER" ] || [ "$TAG" != "$MAN" ]; then
-            echo "::error::версия в теге, version.json и AndroidManifest.xml должны совпадать"; exit 1
+          COD=$(grep -o 'android:versionCode="[^"]*"' android/AndroidManifest.xml | cut -d'"' -f2)
+          VER=$(grep -o "const VERSION = '[^']*'" game/game.js | cut -d"'" -f2)
+          CDE=$(grep -oE 'const CODE = [0-9]+' game/update.js | grep -oE '[0-9]+')
+          echo "тег=$TAG манифест=$MAN/$COD game.js=$VER update.js=$CDE"
+          if [ "$TAG" != "$MAN" ] || [ "$TAG" != "$VER" ] || [ "$COD" != "$CDE" ]; then
+            echo "::error::версия разошлась. Правь её только через tools/release.py, он поднимает все три места разом."; exit 1
           fi
 
       - name: Собрать HTML
@@ -51,11 +55,8 @@ jobs:
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: '17' }
 
-      # APK либо собирается на раннере из секретов, либо берётся готовым из prebuilt/.
-      # Цепочки разные (раннер — javac, build_apk.sh — ecj), поэтому sha256 локальной
-      # сборки со сборкой раннера не сходится: когда version.json посчитан локально,
-      # положи тот же файл в prebuilt/ — он имеет приоритет. Сверка sha256 ниже
-      # проверяет любой из двух путей.
+      # APK либо собирается здесь из секретов, либо берётся готовым из prebuilt/
+      # (запасной путь, когда сборку делали руками). Приоритет у готового файла.
       - name: Подготовить APK
         id: apk
         env:
@@ -63,9 +64,10 @@ jobs:
           KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASS }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         run: |
+          mkdir -p dist
           if [ -f prebuilt/Grimhold3D.apk ]; then
-            echo "::notice::беру готовый APK из prebuilt/, сборка на раннере не нужна"
-            mkdir -p dist && cp prebuilt/Grimhold3D.apk dist/Grimhold3D.apk
+            echo "::notice::беру готовый APK из prebuilt/"
+            cp prebuilt/Grimhold3D.apk dist/Grimhold3D.apk
             echo "built=yes" >> $GITHUB_OUTPUT; exit 0
           fi
           if [ -z "$KEYSTORE_B64" ]; then
@@ -75,7 +77,7 @@ jobs:
           echo "$KEYSTORE_B64" | base64 -d > /tmp/release.keystore
           BT=$(ls -d "$ANDROID_SDK_ROOT"/build-tools/* | sort -V | tail -1)
           JAR="$ANDROID_SDK_ROOT/platforms/android-34/android.jar"
-          B=android/build; rm -rf $B; mkdir -p $B/res $B/classes $B/dex dist
+          B=android/build; rm -rf $B; mkdir -p $B/res $B/classes $B/dex
           "$BT/aapt2" compile --dir android/res -o $B/res/compiled.zip
           "$BT/aapt2" link -o $B/resources.apk -I "$JAR" --manifest android/AndroidManifest.xml \
             -A game --auto-add-overlay --java $B/gen $B/res/compiled.zip
@@ -91,21 +93,17 @@ jobs:
           rm -f /tmp/release.keystore
           echo "built=yes" >> $GITHUB_OUTPUT
 
-      # Игра сверяет sha256 скачанного APK с version.json и отказывается ставить файл,
-      # если сумма не сошлась. Раннер собирает другой цепочкой, чем build_apk.sh
-      # (javac против ecj, свои версии aapt2/d8), поэтому байт-в-байт совпадения нет.
-      # Такой APK к релизу не прикладываем — иначе обновление сломается у всех.
-      - name: Сверить SHA-256 с version.json
-        id: sha
+      # Готовый APK из prebuilt/ может оказаться от прошлой версии. Тогда игра поставит
+      # сборку со старым versionCode и снова предложит то же обновление — по кругу.
+      - name: Сверить versionCode внутри APK
         if: steps.apk.outputs.built == 'yes'
         run: |
-          WANT=$(python3 -c "import json;print(json.load(open('version.json')).get('apkSha256',''))")
-          GOT=$(sha256sum dist/Grimhold3D.apk | cut -d' ' -f1)
-          echo "version.json=$WANT сборка=$GOT"
-          if [ -n "$WANT" ] && [ "$WANT" != "$GOT" ]; then
-            rm -f dist/Grimhold3D.apk
-            echo "mismatch=yes" >> $GITHUB_OUTPUT
-            echo "::error::sha256 сборки раннера ($GOT) не совпал с version.json ($WANT). APK к релизу не приложен: выложи вручную тот файл, по которому считался version.json, либо пересчитай version.json сборкой раннера."
+          BT=$(ls -d "$ANDROID_SDK_ROOT"/build-tools/* | sort -V | tail -1)
+          GOT=$("$BT/aapt2" dump badging dist/Grimhold3D.apk | grep -oE "versionCode='[0-9]+'" | grep -oE '[0-9]+')
+          WANT=$(grep -o 'android:versionCode="[^"]*"' android/AndroidManifest.xml | cut -d'"' -f2)
+          echo "в APK versionCode=$GOT, в манифесте $WANT"
+          if [ "$GOT" != "$WANT" ]; then
+            echo "::error::APK собран для versionCode $GOT, а выпускается $WANT. Похоже, в prebuilt/ лежит файл от прошлой версии."; exit 1
           fi
 
       - name: Текст релиза
@@ -120,8 +118,24 @@ jobs:
             dist/Grimhold3D.html
           fail_on_unmatched_files: false
 
-      - name: Провалить сборку — APK не приложен
-        if: steps.sha.outputs.mismatch == 'yes'
+      # Манифест обновляем последним: до этого момента у игроков в version.json стоит
+      # прошлая версия, и никто не видит обновления, для которого ещё нет файла.
+      - name: Обновить version.json в main
+        if: steps.apk.outputs.built == 'yes'
+        env:
+          TAG_NAME: ${{ steps.rel.outputs.tag }}
         run: |
-          echo "Релиз опубликован без APK: sha256 не совпал с version.json. Приложи APK вручную."
-          exit 1
+          python3 tools/make_manifest.py "$TAG_NAME" dist/Grimhold3D.apk
+          cp version.json /tmp/version.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin main
+          git checkout -f -B main origin/main
+          cp /tmp/version.json version.json
+          git add version.json
+          if git diff --cached --quiet; then echo "манифест не изменился"; exit 0; fi
+          git commit -m "version.json: $TAG_NAME по факту выпущенного APK
+
+          Сгенерирован tools/make_manifest.py из AndroidManifest.xml, CHANGELOG.md
+          и опубликованного файла, поэтому apkSha256 совпадает с релизом по построению."
+          git push origin main

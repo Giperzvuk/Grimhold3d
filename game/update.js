@@ -4,7 +4,7 @@
 'use strict';
 const Update = (() => {
   const REPO = 'Giperzvuk/Grimhold3d', BRANCH = 'main';
-  const CODE = 19;                       // versionCode ЭТОЙ сборки — растёт с каждым релизом
+  const CODE = 20;                       // versionCode ЭТОЙ сборки — растёт с каждым релизом
   const MANIFEST = `https://raw.githubusercontent.com/${REPO}/${BRANCH}/version.json`;
   const API = `https://api.github.com/repos/${REPO}/releases/latest`;
   const PAGE = `https://github.com/${REPO}/releases/latest`;
