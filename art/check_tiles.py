@@ -16,6 +16,8 @@ PERIMETER_PCT  = 5.0    # общая у всех вариантов кромка
 BRIGHT_SPREAD  = 6.0    # разброс средней яркости между вариантами
 LIGHT_GRAD_PCT = 8.0    # перепад яркости по кадру — признак направленного света
 VIGNETTE_PCT   = 8.0    # разница яркости края и центра
+SEAM_SIGMA     = 4.0    # внутренний шов: провал яркости против обычных колебаний
+SHIFT_RATIO    = 0.45   # варианты как циклические сдвиги одного исходника
 
 lum = lambda a: a[..., 0] * 0.299 + a[..., 1] * 0.587 + a[..., 2] * 0.114
 
@@ -122,6 +124,54 @@ def check_perimeter(Q, r):
         r.bad('края вариантов различаются — при случайной раскладке будут расходиться стыки')
 
 
+def check_inner_seam(Q, r):
+    """Заживление шва после сдвига оставляет внутри кадра тёмную линию.
+    Внешние края она не трогает, поэтому проверкой швов не ловится."""
+    worst = (0, 0, 0.0, 0.0)
+    for i, q in enumerate(Q):
+        l = lum(q.astype(np.float64))
+        for axis, v in ((0, l.mean(0)), (1, l.mean(1))):
+            k = max(len(v) // 32, 3) | 1
+            local = np.convolve(np.pad(v, (k // 2, k // 2), mode='wrap'), np.ones(k) / k, 'valid')
+            d = v - local
+            sig = abs(d.min()) / max(d.std(), 1e-9)
+            if sig > worst[2]:
+                worst = (i, axis, sig, abs(d.min()) / max(v.mean(), 1e-9) * 100)
+    i, axis, sig, pct = worst
+    where = 'по столбцам' if axis == 0 else 'по строкам'
+    if sig > SEAM_SIGMA:
+        r.note(f'внутренний шов: квадрант {i} {where} — провал яркости {sig:.1f}σ '
+               f'({pct:.0f}% от средней) при пороге {SEAM_SIGMA}σ. Похоже на след заживления '
+               f'после сдвига. Если материал ровный, линия может проступить решёткой.')
+    else:
+        r.ok(f'внутренних швов нет (худший {sig:.1f}σ при пороге {SEAM_SIGMA}σ)')
+
+
+def check_shifted(Q, r):
+    """Четыре варианта, полученные сдвигом одного исходника, содержат те же детали
+    в других местах. §B.1 просит другие детали: другую трещину, другое пятно мха."""
+    S = [lum(np.asarray(Image.fromarray(q).resize((64, 64), Image.BOX).convert('RGB'),
+                        dtype=np.float64)) for q in Q]
+    hits, offs = 0, []
+    for i in range(4):
+        for j in range(i + 1, 4):
+            # шаг обязан быть по одному: смещения бывают нечётными, и на шаге 2
+            # пик проходится мимо, а совпадение при сдвиге на пиксель уже разваливается
+            diffs = np.array([[np.abs(S[i] - np.roll(S[j], (dy, dx), (0, 1))).mean()
+                               for dx in range(64)] for dy in range(64)])
+            best, mean = diffs.min(), diffs.mean()
+            if best < mean * SHIFT_RATIO:
+                hits += 1
+                p = np.unravel_index(diffs.argmin(), diffs.shape)
+                offs.append(f'{i}~{j}@{p[0]},{p[1]}')
+    if hits >= 3:
+        r.note(f'варианты похожи на сдвиги одного исходника: {hits} пар из 6 '
+               f'({", ".join(offs)}). Повтор по сетке это ломает, но детали во всех '
+               f'вариантах одни и те же — §B.1 просит разные.')
+    else:
+        r.ok(f'варианты не сводятся друг к другу сдвигом ({hits} пар из 6)')
+
+
 def check_light(Q, r):
     """§A.3: запечённые тени, направленный свет и виньетки запрещены."""
     grad_bad, vig_bad = [], []
@@ -198,6 +248,8 @@ def check_tile(path, r):
     check_mirror(Q, r)
     check_seams(Q, r)
     check_perimeter(Q, r)
+    check_inner_seam(Q, r)
+    check_shifted(Q, r)
     check_light(Q, r)
     check_tone(Q, r)
     check_detail(a, Q, r)
