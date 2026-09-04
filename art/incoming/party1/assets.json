@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "assets": [
+    {
+      "name": "brick",
+      "file": "tiles/brick.png",
+      "type": "tile",
+      "size": [
+        2048,
+        2048
+      ],
+      "variants": 4,
+      "seamless": true,
+      "alpha": false,
+      "notes": "4 варианта; циклический сдвиг и локальное заживление; общая кромка 12 px"
+    },
+    {
+      "name": "grassDark",
+      "file": "tiles/grassDark.png",
+      "type": "tile",
+      "size": [
+        2048,
+        2048
+      ],
+      "variants": 4,
+      "seamless": true,
+      "alpha": false,
+      "notes": "4 варианта; циклический сдвиг и локальное заживление; общая кромка 12 px"
+    },
+    {
+      "name": "rock",
+      "file": "tiles/rock.png",
+      "type": "tile",
+      "size": [
+        2048,
+        2048
+      ],
+      "variants": 4,
+      "seamless": true,
+      "alpha": false,
+      "notes": "4 варианта; циклический сдвиг и локальное заживление; общая кромка 12 px"
+    },
+    {
+      "name": "crypt",
+      "file": "tiles/crypt.png",
+      "type": "tile",
+      "size": [
+        2048,
+        2048
+      ],
+      "variants": 4,
+      "seamless": true,
+      "alpha": false,
+      "notes": "4 варианта; циклический сдвиг и локальное заживление; общая кромка 12 px"
+    }
+  ]
+}
