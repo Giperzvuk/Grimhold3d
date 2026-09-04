@@ -51,34 +51,14 @@ jobs:
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: '17' }
 
-      - name: Собрать и подписать APK
+      # ВРЕМЕННАЯ ВЕТКА. Вместо сборки берём APK, собранный локально через build_apk.sh:
+      # раннер собирает другой цепочкой (javac против ecj) и байт-в-байт не сойдётся,
+      # а игра сверяет sha256 после загрузки. Шаг сверки ниже эту сумму проверит.
+      - name: Взять готовый APK из дерева
         id: apk
-        env:
-          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
-          KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASS }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         run: |
-          if [ -z "$KEYSTORE_B64" ]; then
-            echo "::warning::нет секрета KEYSTORE_B64 — APK не собираю, релиз выйдет только с HTML"
-            echo "built=no" >> $GITHUB_OUTPUT; exit 0
-          fi
-          echo "$KEYSTORE_B64" | base64 -d > /tmp/release.keystore
-          BT=$(ls -d "$ANDROID_SDK_ROOT"/build-tools/* | sort -V | tail -1)
-          JAR="$ANDROID_SDK_ROOT/platforms/android-34/android.jar"
-          B=android/build; rm -rf $B; mkdir -p $B/res $B/classes $B/dex dist
-          "$BT/aapt2" compile --dir android/res -o $B/res/compiled.zip
-          "$BT/aapt2" link -o $B/resources.apk -I "$JAR" --manifest android/AndroidManifest.xml \
-            -A game --auto-add-overlay --java $B/gen $B/res/compiled.zip
-          javac --release 8 -encoding UTF-8 -nowarn -classpath "$JAR" -d $B/classes \
-            $(find android/src $B/gen -name '*.java')
-          "$BT/d8" --release --min-api 26 --lib "$JAR" --output $B/dex $(find $B/classes -name '*.class')
-          python3 pack.py $B/resources.apk $B/dex/classes.dex $B/unsigned.apk
-          "$BT/apksigner" sign --ks /tmp/release.keystore --ks-pass "pass:$KEYSTORE_PASS" \
-            --key-pass "pass:$KEYSTORE_PASS" --ks-key-alias "$KEY_ALIAS" \
-            --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true \
-            --out dist/Grimhold3D.apk $B/unsigned.apk
-          "$BT/apksigner" verify --verbose dist/Grimhold3D.apk
-          rm -f /tmp/release.keystore
+          test -f prebuilt/Grimhold3D.apk
+          mkdir -p dist && cp prebuilt/Grimhold3D.apk dist/Grimhold3D.apk
           echo "built=yes" >> $GITHUB_OUTPUT
 
       # Игра сверяет sha256 скачанного APK с version.json и отказывается ставить файл,
