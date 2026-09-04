@@ -1,17 +1,19 @@
 {
-  "version": "1.8",
-  "versionCode": 19,
+  "version": "1.9",
+  "versionCode": 20,
   "date": "2026-09-04",
   "critical": false,
   "notes": [
-    "Обновление прямо из игры: проверка версии на GitHub, список изменений, загрузка и установка APK одной кнопкой",
-    "Исходники выложены на GitHub, страница игры собирается в GitHub Pages",
-    "Проверка обновлений отключается в настройках; версию можно пропустить"
+    "Починена веб-версия: страница собиралась без DOCTYPE и viewport, на телефоне не отображалась",
+    "Обучение больше не встаёт на парировании — его нельзя было выполнить в стартовой деревне",
+    "Волку вернули голову: сборка модели уничтожала поддерево шеи",
+    "Озвучка не виснет: у запроса появился предел ожидания и внятный диагноз",
+    "Первые четыре нарисованные поверхности: кирпич, лес, скала, крипта"
   ],
-  "apk": "https://github.com/Giperzvuk/Grimhold3d/releases/download/v1.8/Grimhold3D.apk",
-  "html": "https://github.com/Giperzvuk/Grimhold3d/releases/download/v1.8/Grimhold3D.html",
+  "apk": "https://github.com/Giperzvuk/Grimhold3d/releases/download/v1.9/Grimhold3D.apk",
+  "html": "https://github.com/Giperzvuk/Grimhold3d/releases/download/v1.9/Grimhold3D.html",
   "web": "https://giperzvuk.github.io/Grimhold3d/",
-  "page": "https://github.com/Giperzvuk/Grimhold3d/releases/tag/v1.8",
-  "apkSize": 1664517,
-  "apkSha256": "239aff50344dbafcb110cdf1ee642fdbe12308d26d9d99bb241ce285a803a6ce"
+  "page": "https://github.com/Giperzvuk/Grimhold3d/releases/tag/v1.9",
+  "apkSize": 2197131,
+  "apkSha256": "2ff7a737a7d13e16c954c3a4a9bf7eabf33764bf5068e37cf71912469f03a0a2"
 }
