@@ -1,15 +1,20 @@
 {
   "name": "grimhold3d",
   "version": "1.0.0",
-  "description": "",
+  "description": "Одиночная RPG от первого лица в духе TES: Shadowkey — один HTML-файл и APK",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node tests/updtest.js && node tests/assettest.js && node tests/test3.js",
+    "test:full": "npm test && node tests/bughunt.js",
+    "build": "python3 build_html.py"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "babylonjs": "^7.54.3"
+  },
+  "devDependencies": {
+    "playwright": "^1.62.1"
   }
 }

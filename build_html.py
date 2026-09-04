@@ -4,7 +4,7 @@
 import os, re, sys
 ROOT = os.path.dirname(os.path.abspath(__file__))
 G = os.path.join(ROOT, 'game')
-NAMES = ['textures.js', 'music.js', 'world.js', 'terrain.js', 'models.js', 'items3d.js', 'render.js',
+NAMES = ['textures.js', 'assets_data.js', 'assets.js', 'music.js', 'world.js', 'terrain.js', 'models.js', 'items3d.js', 'render.js',
          'game.js', 'input.js', 'layout.js', 'craft.js', 'voice.js', 'story.js', 'update.js', 'ui.js']
 CDN = 'https://cdnjs.cloudflare.com/ajax/libs/babylonjs/7.54.3/babylon.js'
 src = lambda n: open(os.path.join(G, n), encoding='utf-8').read()

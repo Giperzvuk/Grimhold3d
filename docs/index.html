@@ -794,6 +794,75 @@ const TEX = (() => {
 
 </script>
 <script>
+// Сгенерировано tools/pack_assets.py — руками не править.
+// Пусто: художественная сдача ещё не принята, игра идёт на процедурных текстурах
+// из textures.js. Появятся принятые поверхности — файл перегенерируется:
+//   python3 tools/pack_assets.py art/incoming/party1
+const ASSET_DATA = { tiles: {} };
+
+</script>
+<script>
+// ---------- Нарисованные поверхности поверх процедурных ----------
+// Если сборка содержит assets_data.js (его делает tools/pack_assets.py из художественной
+// сдачи), подменяем канвасы в TEX.T на нарисованные тайлы. Нет файла или картинка
+// не открылась — молча остаётся процедурная генерация из textures.js.
+//
+// Раскладка та же, что у процедурных: сетка 2×2 из четырёх вариантов одной поверхности,
+// клетки карты выбирают квадрант. Поэтому подмена ничего не меняет ни в геометрии,
+// ни в UV — рендер продолжает работать с канвасом, только большего размера.
+'use strict';
+const ASSETS = (() => {
+  const data = (typeof ASSET_DATA !== 'undefined' && ASSET_DATA && ASSET_DATA.tiles) || null;
+  const names = data ? Object.keys(data) : [];
+  let pending = names.length;
+  let loaded = 0;
+  const waiters = [];
+
+  function done() {
+    // Уровень уже собран: материалы держат старые текстуры, поэтому сбрасываем кэш
+    // и пересобираем сцену на месте — тем же приёмом, что смена качества теней.
+    if (loaded && typeof R !== 'undefined' && R.dropTileCache) {
+      R.dropTileCache();
+      if (typeof G !== 'undefined' && G && typeof L !== 'undefined' && L &&
+          typeof loadLevel === 'function' && typeof P !== 'undefined' && P) {
+        try { loadLevel(L.id, { wx: P.x, wz: P.z, yaw: P.yaw }); } catch (e) { console.error(e); }
+      }
+    }
+    while (waiters.length) waiters.shift()();
+  }
+
+  function put(name, src) {
+    const img = new Image();
+    img.onload = () => {
+      if (typeof TEX !== 'undefined' && TEX.T && TEX.T[name]) {
+        const c = document.createElement('canvas');
+        c.width = img.width; c.height = img.height;
+        const x = c.getContext('2d');
+        x.imageSmoothingEnabled = false;      // фильтрация NEAREST, как в движке
+        x.drawImage(img, 0, 0);
+        c.isTile = true;                       // без этого texOf не включит повтор по UV
+        TEX.T[name] = c;
+        loaded++;
+      }
+      if (--pending === 0) done();
+    };
+    img.onerror = () => { if (--pending === 0) done(); };
+    img.src = src;
+  }
+
+  if (pending) for (const n of names) put(n, data[n]); else done();
+
+  return {
+    // Сколько поверхностей заменено нарисованными. 0 — игра целиком на процедурных.
+    get count() { return loaded; },
+    get total() { return names.length; },
+    get ready() { return pending === 0; },
+    whenReady(fn) { if (pending === 0) fn(); else waiters.push(fn); },
+  };
+})();
+
+</script>
+<script>
 // ---------- Процедурная музыка: секвенсор на WebAudio ----------
 const MUSIC = (() => {
   let ctx = null, out = null, cur = null, curKind = null, nextT = 0, step = 0, volume = 0.55, duckG = null, duckV = 1;
@@ -1970,6 +2039,14 @@ const R = (() => {
     t = new BABYLON.DynamicTexture('tx', cnv, scene, !!cnv.isTile, BABYLON.Texture.NEAREST_SAMPLINGMODE); t.getContext().drawImage(cnv, 0, 0); t.update(true);
     t.wrapU = t.wrapV = BABYLON.Texture.WRAP_ADDRESSMODE; if (alpha) t.hasAlpha = true; texCache.set(cnv, t); return t;
   }
+  // Сброс кэшей поверхностей: нужен, если нарисованные тайлы доехали уже после того,
+  // как уровень собран. Зовётся из assets.js и следом идёт пересборка уровня.
+  function dropTileCache() {
+    for (const m of matCache.values()) { try { m.dispose(); } catch (e) { } }
+    for (const t of texCache.values()) { try { t.dispose(); } catch (e) { } }
+    matCache.clear(); texCache.clear();
+  }
+
   function tileMat(name) {
     let m = matCache.get(name); if (m) return m;
     m = new BABYLON.StandardMaterial('tile_' + name, scene); m.diffuseTexture = texOf(TEX.T[name]); m.specularColor = new BABYLON.Color3(0.01, 0.01, 0.01); m.maxSimultaneousLights = LIGHTS_MAX; m.backFaceCulling = true;
@@ -2286,7 +2363,7 @@ const R = (() => {
   function setUnderwater(v) { PSX.under = v; }
   function setWind(v) { PSX.wind = v; }
   function fps() { return engine.getFps(); }
-  return { init, resize, setHires, decal, setGrade, setUnderwater, setWind, setShadowQuality, setShadowSource, viewmodel, viewmodelUpdate, texOf, tileMat, spriteMesh, itemMesh, propOrSprite, Prop, Sprite, Group, buildLevel, treeField, decorField, fire, weatherSystem, moveWeather, setWeatherRate, takeLight, freeLight, setupLevelLight, addShadowCasters, daylight, project, render, fps, get scene() { return scene; }, get camera() { return camera; }, get engine() { return engine; }, get torch() { return torch; }, get sun() { return sun; }, get hemi() { return hemi; }, lightPool: () => lightPool };
+  return { init, resize, setHires, decal, dropTileCache, setGrade, setUnderwater, setWind, setShadowQuality, setShadowSource, viewmodel, viewmodelUpdate, texOf, tileMat, spriteMesh, itemMesh, propOrSprite, Prop, Sprite, Group, buildLevel, treeField, decorField, fire, weatherSystem, moveWeather, setWeatherRate, takeLight, freeLight, setupLevelLight, addShadowCasters, daylight, project, render, fps, get scene() { return scene; }, get camera() { return camera; }, get engine() { return engine; }, get torch() { return torch; }, get sun() { return sun; }, get hemi() { return hemi; }, lightPool: () => lightPool };
 })();
 
 </script>

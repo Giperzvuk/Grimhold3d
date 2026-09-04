@@ -55,10 +55,34 @@ APK собирается без Android Studio и Gradle: `aapt2` → `ecj` → 
 Пути к инструментам заданы в начале `build_apk.sh`. В CI то же самое делает
 `.github/workflows/release.yml` инструментами из Android SDK, который уже стоит на раннере.
 
+## Нарисованные текстуры
+
+По умолчанию все поверхности процедурные — их генерирует `game/textures.js`. Когда
+художник сдаёт нарисованные, они кладутся поверх:
+
+```bash
+python3 art/check_tiles.py art/incoming/party1     # приёмка: швы, зеркальность, палитра
+python3 tools/pack_assets.py art/incoming/party1   # → game/assets_data.js
+python3 build_html.py
+```
+
+`pack_assets.py` уменьшает исходники (они приходят по 2048 px и больше) до целевых
+256 px на вариант и складывает в `game/assets_data.js` как data-URI. Именно data-URI,
+а не файлы рядом: игра обязана работать из одного HTML и из `file://` внутри APK,
+а `build_html.py` вклеивает в страницу только JS.
+
+`game/assets.js` подменяет канвасы в `TEX.T` на загруженные. Раскладка та же, что
+у процедурных, — сетка 2×2 из четырёх вариантов, клетки карты выбирают квадрант,
+поэтому геометрия и UV не меняются. Нет файла, пустой манифест или битая картинка —
+молча остаётся процедурная генерация.
+
+Задания художнику и разбор сдач — в [`art/`](art/).
+
 ## Релиз
 
 ```bash
 python3 tools/release.py 1.9 --notes "Что изменилось" "И ещё"
+cp dist/Grimhold3D.apk prebuilt/Grimhold3D.apk    # см. prebuilt/README.md
 git add -A && git commit -m "v1.9" && git tag v1.9 && git push --follow-tags
 ```
 
@@ -66,14 +90,28 @@ git add -A && git commit -m "v1.9" && git tag v1.9 && git push --follow-tags
 `CODE` в `game/update.js` — расхождение здесь ломает обновление), пересобирает HTML и APK,
 считает SHA-256 и переписывает `version.json` и `CHANGELOG.md`.
 По тегу `v*` workflow создаёт релиз и прикладывает `Grimhold3D.apk` и `Grimhold3D.html`.
+Тег можно и не пушить: у workflow `release` есть ручной запуск с полем `tag` — он сам
+создаст тег на выбранной ветке. Приложенный APK сверяется по SHA-256 с `version.json`,
+и при расхождении не публикуется, поэтому собранный локально файл кладётся
+в [`prebuilt/`](prebuilt/) — раннер собирает другой цепочкой и байт-в-байт не совпадёт.
 
 ## Тесты
 
 ```bash
 npm install
-node tests/bughunt.js     # 28 проверок: рельеф, дома, предметы, мини-игры, утечки
-node tests/updtest.js     # механизм обновления
+npx playwright install chromium   # тесты гоняют игру в настоящем браузере
+
+npm test                  # обновление, загрузчик ассетов, прогон сюжета — около минуты
+npm run test:full         # то же плюс bughunt, около семи минут
+```
+
+По отдельности:
+
+```bash
+node tests/updtest.js     # механизм обновления, 30 проверок
+node tests/assettest.js   # загрузчик нарисованных поверхностей, 17 проверок
 node tests/test3.js       # полный прогон сюжета
+node tests/bughunt.js     # 39 проверок: рельеф, дома, предметы, мини-игры, утечки
 node tests/t3d.js         # скриншоты
 ```
 
@@ -85,6 +123,8 @@ android/       WebView-обёртка: activity, мосты озвучки и о
 tools/         release.py, прокси для Fish Audio (FastAPI и Cloudflare Worker)
 tests/         сценарные проверки на Playwright
 docs/          сборка для GitHub Pages
+art/           задания художнику, приёмка сдач, проверка тайлов
+prebuilt/      сюда кладётся собранный APK перед релизом через CI
 version.json   манифест обновления — его читает игра
 ```
 

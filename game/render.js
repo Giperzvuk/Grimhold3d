@@ -66,6 +66,14 @@ const R = (() => {
     t = new BABYLON.DynamicTexture('tx', cnv, scene, !!cnv.isTile, BABYLON.Texture.NEAREST_SAMPLINGMODE); t.getContext().drawImage(cnv, 0, 0); t.update(true);
     t.wrapU = t.wrapV = BABYLON.Texture.WRAP_ADDRESSMODE; if (alpha) t.hasAlpha = true; texCache.set(cnv, t); return t;
   }
+  // Сброс кэшей поверхностей: нужен, если нарисованные тайлы доехали уже после того,
+  // как уровень собран. Зовётся из assets.js и следом идёт пересборка уровня.
+  function dropTileCache() {
+    for (const m of matCache.values()) { try { m.dispose(); } catch (e) { } }
+    for (const t of texCache.values()) { try { t.dispose(); } catch (e) { } }
+    matCache.clear(); texCache.clear();
+  }
+
   function tileMat(name) {
     let m = matCache.get(name); if (m) return m;
     m = new BABYLON.StandardMaterial('tile_' + name, scene); m.diffuseTexture = texOf(TEX.T[name]); m.specularColor = new BABYLON.Color3(0.01, 0.01, 0.01); m.maxSimultaneousLights = LIGHTS_MAX; m.backFaceCulling = true;
@@ -382,5 +390,5 @@ const R = (() => {
   function setUnderwater(v) { PSX.under = v; }
   function setWind(v) { PSX.wind = v; }
   function fps() { return engine.getFps(); }
-  return { init, resize, setHires, decal, setGrade, setUnderwater, setWind, setShadowQuality, setShadowSource, viewmodel, viewmodelUpdate, texOf, tileMat, spriteMesh, itemMesh, propOrSprite, Prop, Sprite, Group, buildLevel, treeField, decorField, fire, weatherSystem, moveWeather, setWeatherRate, takeLight, freeLight, setupLevelLight, addShadowCasters, daylight, project, render, fps, get scene() { return scene; }, get camera() { return camera; }, get engine() { return engine; }, get torch() { return torch; }, get sun() { return sun; }, get hemi() { return hemi; }, lightPool: () => lightPool };
+  return { init, resize, setHires, decal, dropTileCache, setGrade, setUnderwater, setWind, setShadowQuality, setShadowSource, viewmodel, viewmodelUpdate, texOf, tileMat, spriteMesh, itemMesh, propOrSprite, Prop, Sprite, Group, buildLevel, treeField, decorField, fire, weatherSystem, moveWeather, setWeatherRate, takeLight, freeLight, setupLevelLight, addShadowCasters, daylight, project, render, fps, get scene() { return scene; }, get camera() { return camera; }, get engine() { return engine; }, get torch() { return torch; }, get sun() { return sun; }, get hemi() { return hemi; }, lightPool: () => lightPool };
 })();
